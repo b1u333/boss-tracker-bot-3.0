@@ -105,16 +105,22 @@ def rebuild_spawn_times():
 # --- HELPERS ---
 def format_timedelta(td):
     seconds = int(td.total_seconds())
-    h, m = divmod(seconds, 3600)
-    m, s = divmod(m, 60)
-    if h > 0:
-        return f"{h}h {m}m {s}s"
-    elif m > 0:
-        return f"{m}m {s}s"
-    else:
-        return f"{s}s"
+    d, seconds = divmod(seconds, 86400)  # 1 day = 86400s
+    h, seconds = divmod(seconds, 3600)
+    m, s = divmod(seconds, 60)
 
-# --- EMBEDS ---
+    parts = []
+    if d > 0:
+        parts.append(f"{d}d")
+    if h > 0:
+        parts.append(f"{h}h")
+    if m > 0:
+        parts.append(f"{m}m")
+    if s > 0 or not parts:
+        parts.append(f"{s}s")
+
+    return " ".join(parts)
+
 def create_embed():
     now = datetime.now(UTC8)
     embed = discord.Embed(
@@ -130,7 +136,7 @@ def create_embed():
             t = spawn_times[boss]
             if t > now:
                 remaining = t - now
-                lines.append(f"**{boss.upper()}**\n{t.strftime('%Y-%m-%d %I:%M %p')} — in {format_timedelta(remaining)}")
+                lines.append(f"**{boss.upper()}**\n{t.strftime('%Y-%m-%d %H:%M')} — in {format_timedelta(remaining)}")
 
     if not lines:
         embed.add_field(name="No Spawns", value="⚠️ No upcoming bosses.", inline=False)
