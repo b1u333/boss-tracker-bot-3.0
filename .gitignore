@@ -1,0 +1,16 @@
+# Ignore environment file with secrets
+.env
+
+# Ignore runtime configs and backups
+config.json
+config_backup.json
+bosses.json
+bosses_backup.json
+
+# Python cache / system files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
