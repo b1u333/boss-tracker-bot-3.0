@@ -1,0 +1,37 @@
+!setinterval venatus 10
+!setinterval viorent 10
+!setinterval ego 21
+!setspawn clemantis monday 11:30
+!setspawn clemantis thursday 19:00
+!setinterval livera 24
+!setinterval araneo 24
+!setinterval undomiel 24
+!setspawn saphirus  sunday 17:00
+!setspawn saphirus tuesday 11:30
+!setspawn nuetro tuesday 19:00
+!setspawn nuetro thursday 11:30
+!setinterval dalia 18
+!setinterval general 29
+!setspawn thymele monday 19:00
+!setspawn thymele wednesday 11:30
+!setinterval amentis 29
+!setinterval baron 32
+!setspawn milavy saturday 15:00
+!setinterval wannitas 48
+!setinterval metus 48
+!setinterval duplican 48
+!setinterval shuliar 35
+!setspawn ringor saturday 17:00
+!setspawn roderick friday 19:00
+!setinterval gareth 32
+!setinterval titore 37
+!setinterval larba 35
+!setinterval catena 35
+!setspawn auraq sunday 21:00
+!setspawn auraq wednesday 21:00
+!setinterval secreta 62
+!setinterval ordo 62
+!setinterval asta 62
+!setinterval supore 62
+!setspawn chaiflock Saturday 22:00
+
