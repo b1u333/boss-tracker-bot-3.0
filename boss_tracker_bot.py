@@ -130,7 +130,7 @@ def create_embed():
             t = spawn_times[boss]
             if t > now:
                 remaining = t - now
-                lines.append(f"**{boss.upper()}**\n{t.strftime('%Y-%m-%d %H:%M')} — in {format_timedelta(remaining)}")
+                lines.append(f"**{boss.upper()}**\n{t.strftime('%Y-%m-%d %I:%M %p')} — in {format_timedelta(remaining)}")
 
     if not lines:
         embed.add_field(name="No Spawns", value="⚠️ No upcoming bosses.", inline=False)
