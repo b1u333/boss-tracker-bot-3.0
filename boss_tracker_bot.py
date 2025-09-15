@@ -105,7 +105,7 @@ def rebuild_spawn_times():
 # --- HELPERS ---
 def format_timedelta(td):
     seconds = int(td.total_seconds())
-    d, seconds = divmod(seconds, 86400)  # 1 day = 86400s
+    d, seconds = divmod(seconds, 86400)
     h, seconds = divmod(seconds, 3600)
     m, s = divmod(seconds, 60)
 
@@ -155,7 +155,7 @@ def create_embed():
 def create_nextspawn_embed():
     now = datetime.now(UTC8)
     embed = discord.Embed(
-        title="🕒 Boss Spawns in Next 24 Hours",
+        title="🕒 Current & Next Boss Spawns (24h)",
         color=0x3498db,
         timestamp=now
     )
@@ -164,20 +164,28 @@ def create_nextspawn_embed():
     for boss in BOSSES:
         if boss in spawn_times:
             next_time = spawn_times[boss]
-            if timedelta(0) <= (next_time - now) <= timedelta(hours=24):
-                upcoming.append((boss, next_time))
-    upcoming.sort(key=lambda x: x[1])
+            time_diff = next_time - now
+
+            # Boss is active right now → plain text
+            if time_diff.total_seconds() <= 0:
+                upcoming.append((boss, "🟢 Spawned", now))
+
+            # Boss will spawn in next 24h
+            elif timedelta(0) < time_diff <= timedelta(hours=24):
+                if next_time.date() == now.date():
+                    label = next_time.strftime("%I:%M %p")
+                else:
+                    label = f"Tomorrow, {next_time.strftime('%I:%M %p')}"
+                upcoming.append((boss, label, next_time))
+
+    # sort by time (Spawned = now, comes first)
+    upcoming.sort(key=lambda x: x[2])
 
     if not upcoming:
-        embed.add_field(name="No Spawns", value="⚠️ No bosses in next 24h.", inline=False)
+        embed.add_field(name="No Spawns", value="⚠️ No bosses active or spawning soon.", inline=False)
     else:
-        lines = []
-        for boss, t in upcoming:
-            if t.date() == now.date():
-                lines.append(f"**{boss.upper()}**\n{t.strftime('%I:%M %p')}")
-            else:
-                lines.append(f"**{boss.upper()}**\nTomorrow, {t.strftime('%I:%M %p')}")
-        embed.add_field(name="Upcoming Spawns", value="\n\n".join(lines), inline=False)
+        lines = [f"**{boss.upper()}**\n{label}" for boss, label, _ in upcoming]
+        embed.add_field(name="Spawns", value="\n\n".join(lines), inline=False)
 
     embed.set_footer(text="⏱ Updates every 15s")
     return embed
@@ -194,8 +202,6 @@ async def setwarningchannel(ctx, channel: discord.TextChannel):
     CONFIG["warning_channel_id"] = channel.id
     save_config()
     await ctx.send(f"✅ Warning channel set to {channel.mention}")
-
-# Removed setwarningrole (no longer needed)
 
 @bot.command()
 async def setinterval(ctx, boss: str, hours: int):
@@ -224,13 +230,14 @@ async def setspawn(ctx, boss: str, day: str, hm: str):
 @bot.command()
 async def killed(ctx, boss: str, hm: str = None, date: str = None):
     boss = boss.upper()
-    if boss not in BOSSES or BOSSES[boss]["type"] != "respawn":
+    if boss not in BOSSES:
         try:
             await ctx.message.add_reaction("❌")
         except (discord.Forbidden, discord.HTTPException):
             pass
         return
 
+    # Parse kill time
     if hm and date:
         try:
             kill_time = datetime.strptime(f"{date} {hm}", "%Y-%m-%d %H:%M").replace(tzinfo=UTC8)
@@ -240,16 +247,35 @@ async def killed(ctx, boss: str, hm: str = None, date: str = None):
     else:
         kill_time = datetime.now(UTC8)
 
-    next_time = kill_time + timedelta(hours=BOSSES[boss]["hours"])
-    BOSSES[boss]["last_killed"] = kill_time.strftime("%Y-%m-%d %H:%M:%S")
-    BOSSES[boss]["warned_for"] = None
-    spawn_times[boss] = next_time
-    save_bosses()
+    if BOSSES[boss]["type"] == "respawn":
+        # Respawn boss → update spawn time
+        next_time = kill_time + timedelta(hours=BOSSES[boss]["hours"])
+        spawn_times[boss] = next_time
+        BOSSES[boss]["last_killed"] = kill_time.strftime("%Y-%m-%d %H:%M:%S")
+        BOSSES[boss]["warned_for"] = None
+        save_bosses()
 
-    await ctx.send(
-        f"✅ Recorded {boss} kill at {kill_time.strftime('%Y-%m-%d %H:%M')}. "
-        f"Next spawn at {next_time.strftime('%Y-%m-%d %H:%M')}."
-    )
+        # Update !nextspawn
+        global last_nextspawn_message
+        if last_nextspawn_message:
+            try:
+                await last_nextspawn_message.edit(embed=create_nextspawn_embed())
+            except discord.NotFound:
+                pass
+
+        await ctx.send(
+            f"✅ Recorded {boss} kill at {kill_time.strftime('%Y-%m-%d %H:%M')}. "
+            f"Next spawn at {next_time.strftime('%Y-%m-%d %H:%M')}."
+        )
+
+    elif BOSSES[boss]["type"] == "weekly":
+        # Weekly boss → just log the kill, no change to spawn time
+        BOSSES[boss]["last_killed"] = kill_time.strftime("%Y-%m-%d %H:%M:%S")
+        save_bosses()
+        await ctx.send(
+            f"✅ Recorded {boss} kill at {kill_time.strftime('%Y-%m-%d %H:%M')}. "
+            f"Next spawn stays the same (weekly schedule)."
+        )
 
 @bot.command()
 async def deleteboss(ctx, boss: str):
@@ -272,11 +298,6 @@ async def deleteboss(ctx, boss: str):
 @bot.command()
 async def spawn(ctx):
     global last_spawn_message
-    if last_spawn_message:
-        try:
-            await last_spawn_message.delete()
-        except (discord.NotFound, discord.Forbidden):
-            pass
     embed = create_embed()
     last_spawn_message = await ctx.send(embed=embed)
     CONFIG["last_spawn_message_id"] = last_spawn_message.id
@@ -285,11 +306,6 @@ async def spawn(ctx):
 @bot.command()
 async def nextspawn(ctx):
     global last_nextspawn_message
-    if last_nextspawn_message:
-        try:
-            await last_nextspawn_message.delete()
-        except (discord.NotFound, discord.Forbidden):
-            pass
     embed = create_nextspawn_embed()
     last_nextspawn_message = await ctx.send(embed=embed)
     CONFIG["last_nextspawn_message_id"] = last_nextspawn_message.id
