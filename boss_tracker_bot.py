@@ -166,11 +166,8 @@ def create_nextspawn_embed():
             next_time = spawn_times[boss]
             time_diff = next_time - now
 
-            # Boss is active right now → plain text
             if time_diff.total_seconds() <= 0:
                 upcoming.append((boss, "🟢 Spawned", now))
-
-            # Boss will spawn in next 24h
             elif timedelta(0) < time_diff <= timedelta(hours=24):
                 if next_time.date() == now.date():
                     label = next_time.strftime("%I:%M %p")
@@ -178,7 +175,6 @@ def create_nextspawn_embed():
                     label = f"Tomorrow, {next_time.strftime('%I:%M %p')}"
                 upcoming.append((boss, label, next_time))
 
-    # sort by time (Spawned = now, comes first)
     upcoming.sort(key=lambda x: x[2])
 
     if not upcoming:
@@ -237,7 +233,6 @@ async def killed(ctx, boss: str, hm: str = None, date: str = None):
             pass
         return
 
-    # Parse kill time
     if hm and date:
         try:
             kill_time = datetime.strptime(f"{date} {hm}", "%Y-%m-%d %H:%M").replace(tzinfo=UTC8)
@@ -248,14 +243,12 @@ async def killed(ctx, boss: str, hm: str = None, date: str = None):
         kill_time = datetime.now(UTC8)
 
     if BOSSES[boss]["type"] == "respawn":
-        # Respawn boss → update spawn time
         next_time = kill_time + timedelta(hours=BOSSES[boss]["hours"])
         spawn_times[boss] = next_time
         BOSSES[boss]["last_killed"] = kill_time.strftime("%Y-%m-%d %H:%M:%S")
         BOSSES[boss]["warned_for"] = None
         save_bosses()
 
-        # Update !nextspawn
         global last_nextspawn_message
         if last_nextspawn_message:
             try:
@@ -269,12 +262,32 @@ async def killed(ctx, boss: str, hm: str = None, date: str = None):
         )
 
     elif BOSSES[boss]["type"] == "weekly":
-        # Weekly boss → just log the kill, no change to spawn time
         BOSSES[boss]["last_killed"] = kill_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        next_candidate = None
+        for sched in BOSSES[boss]["schedule"]:
+            day = sched["day"].capitalize()
+            t = datetime.strptime(sched["time"], "%H:%M").time()
+            days_map = {
+                "Monday": 0, "Tuesday": 1, "Wednesday": 2,
+                "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6
+            }
+            target_day = days_map[day]
+            days_ahead = (target_day - kill_time.weekday()) % 7
+            candidate = kill_time.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0) + timedelta(days=days_ahead)
+            if candidate <= kill_time:
+                candidate += timedelta(days=7)
+
+            if not next_candidate or candidate < next_candidate:
+                next_candidate = candidate
+
+        if next_candidate:
+            spawn_times[boss] = next_candidate
+
         save_bosses()
         await ctx.send(
             f"✅ Recorded {boss} kill at {kill_time.strftime('%Y-%m-%d %H:%M')}. "
-            f"Next spawn stays the same (weekly schedule)."
+            f"Next spawn at {next_candidate.strftime('%Y-%m-%d %H:%M')}."
         )
 
 @bot.command()
